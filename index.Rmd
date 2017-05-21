@@ -1,0 +1,12 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Sandeep Anand"
+date: "May 21, 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE, highlight=TRUE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown Document for the Practical machine learning Project for the Coursera DataScience Course
