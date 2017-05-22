@@ -5,8 +5,183 @@ date: "May 21, 2017"
 output: html_document
 ---
 
-```{r setup, include=FALSE, highlight=TRUE}
+```{r setup, include=FALSE, highlight=TRUE, warning=FALSE, message=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 ```
 
-## R Markdown Document for the Practical machine learning Project for the Coursera DataScience Course
+# R Markdown Document for the Practical machine learning Project for the Coursera DataScience Course
+
+## Description
+###
+**Data**
+
+  - The training data for this project are available here:https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv
+
+  - The test data are available here:https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv
+
+**Citation**
+
+  The data for this project come from this source: http://groupware.les.inf.puc-rio.br/har. 
+
+**AIM**
+
+  - One thing that people regularly do is quantify how much of a particular activity they do, but they rarely quantify how well they do it. In this project, your goal will be to      use data from accelerometers on the belt, forearm, arm, and dumbell of 6 participants. They were asked to perform barbell lifts correctly and incorrectly in 5 different ways.
+  - The goal of your project is to predict the manner in which they did the exercise. This is the "classe" variable in the training set. You may use any of the other variables to     predict with. You should create a report describing how you built your model, how you used cross validation, what you think the expected out of sample error is, and why you       made the choices you did. You will also use your prediction model to predict 20 different test cases.
+
+**Basic Approach & Steps**
+
+  - Get The Data and clean the Data avalable
+  - Break the data into training and test sets 
+  - Apply different models to the training and then to the test sets to predict the particular variable given based on the predictors/covariates present or you want
+  - Check the Confusion Matrix for all the different models to see the accuracy 
+  - Use of cross validation for applying Random forest model
+  - Use of OOB/Out of Sample error for random forest 
+  - Predict "20" different test cases with your final model chosen 
+  - Once the Prediction model is finalized , we do not ever go back to modify anything , but analyze the sample test model
+  - Use Combining Predictors : https://github.com/lgreski/datasciencectacontent/blob/master/markdown/pml-combiningPredictorsBinomial.md
+  - **This I write after the model is finalised , I would have loved to add some more modelling techniques like gradient boosting, xgboost , Decision Trees to characterize but due to time constraints I will add those later to the github link** 
+
+```{r Getting the Data, echo=TRUE}  
+library(data.table)
+
+#Training data
+link<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+myactivitydat<-as.data.frame(fread(link))
+
+#Testing data
+link2<-"https://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+testing<-as.data.frame(fread(link2))
+```
+
+
+## Cleaning The data 
+
+- Getting the filtered data without the Covariates that need not affect the Outcome or are Non zero variance 
+- Getting the filtered data also without the variables that have 80% or more of missing data
+
+```{r tidy the Data, echo=TRUE}
+library(tidyr)
+library(dplyr)
+library(caret)
+
+nzv<-nearZeroVar(myactivitydat)
+nzv
+
+nzvvector<-c()
+
+colname<-colnames(myactivitydat)
+# Store the column names that are nzv into a vector
+for (i in 1:length(nzv)){
+  for (j in 1:length(colname)){
+    if (nzv[i]==j){
+      nzvvector[i]<-colname[j]
+      break()
+    }
+  }
+}
+nzvvector
+
+filtereddata<-myactivitydat[,-nzv]
+
+dim(myactivitydat)
+dim(filtereddata)
+
+missing_thres<-0.8*nrow(filtereddata)
+
+navalues<-sapply(colnames(filtereddata), function(x) if(sum(is.na(filtereddata[,x])) >= missing_thres) {return(TRUE)} else{return(FALSE)})
+
+training<-filtereddata[, !navalues]
+dim(training)
+
+# Cleaning the Testing data as well
+nzvtest<-nearZeroVar(testing)
+
+filteredtest<-testing[,-nzvtest]
+dim(filteredtest)
+missing_threstest<-0.8*nrow(filteredtest)
+
+navalues<-sapply(colnames(filteredtest), function(x) if(sum(is.na(filteredtest[,x])) >= missing_thres) {return(TRUE)} else{return(FALSE)})
+navalues
+```
+
+## Getting rid of some More variables through grepping the unrelated names
+
+ - This cleans up most of the covariates and gives us a final training set to work on
+
+```{r clean data through grep, echo=TRUE}
+classe<-training$classe
+trunwvar <- grepl("^X|timestamp|window", names(training))
+trainclean1 <- training[, !trunwvar]
+traincleanfinal <- trainclean1[, sapply(trainclean1,is.numeric)]
+traincleanfinal$classe <- classe
+
+testunwvar <- grepl("^X|timestamp|window", names(filteredtest))
+testclean1 <- filteredtest[, !testunwvar]
+testcleanfinal <- testclean1[, sapply(testclean1,is.numeric)]
+
+dim(traincleanfinal)
+dim(testcleanfinal)
+```
+
+
+## Data Partitioning as now Test and Train data have equal number of rows and columns
+
+``` {r Outcome,echo=TRUE}
+set.seed(33242)
+inTrain<-createDataPartition(traincleanfinal$classe, p=0.7, list = FALSE)
+traindata<-traincleanfinal[inTrain,]
+testdata<-traincleanfinal[-inTrain,]
+```
+
+
+# Plotting the correlation Matrix
+
+  - The Graph below shows that the variables are not that heavily correlated so further PCA or SVD might be an overkill
+
+```{r Correlation test, echo=TRUE}
+library(corrplot)
+filtervar<-grepl("belt|arm|dumbell", names(training))
+trainmore<-training[, filtervar]
+#traincorr<-cor(myactivitydat[, which(names(myactivitydat) %in% c("classe"))])
+traincorr<-cor(trainmore)
+corrplot.mixed(traincorr, lower = "circle", upper = "square", tl.pos = "lt", diag = "n", order="hclust", hclust.method="complete")
+
+```
+
+
+# Training Model for the Data 
+
+##
+  - Using Random Forest with 5 K fold cross-validation as this gives fairly good accuracy 
+  - Would give a #TODO as to try boosting here as well, could have been something to omit or accept
+  - Accuracy comes out to be ~99%
+  - Out of Sample error rate ~1% based on the testset -> testdata
+  
+```{r Random Forest,echo=TRUE}
+controlrf<-trainControl(method = "cv",5)
+modelrf<-train(classe~., data=traindata, method="rf", trainControl=controlrf, ntree=100)
+modelrf
+
+predictrf<-predict(modelrf,testdata)
+confmat<-confusionMatrix(testdata$classe, predictrf)
+confmat
+
+missed = function(values, prediction) {
+  sum(prediction!=values)/length(values)
+}
+
+
+oobe<-missed(testdata$classe, predictrf)
+oobe
+
+```
+
+## Applying the final Test data here
+
+  - Printing out the results of the 20 samples
+
+```{r Final Model, echo=TRUE}
+result<-predict(modelrf, testcleanfinal[, -length(names(testcleanfinal))])
+result
+
+```  
