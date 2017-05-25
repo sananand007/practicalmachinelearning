@@ -184,4 +184,25 @@ oobe
 result<-predict(modelrf, testcleanfinal[, -length(names(testcleanfinal))])
 result
 
-```  
+```
+
+## Gradient Boosting Machine
+
+  - Using the gbm package for training the model
+  
+```{r gbm,echo=TRUE, message=FALSE,warning=FALSE}
+library(gbm)
+set.seed(1337)
+gbmmodel<-gbm(classe~.,data = traindata,distribution = "multinomial",cv.folds = 5,verbose = "CV",n.cores = 1,n.trees = 2000)
+
+best.iter <- gbm.perf(gbmmodel, method = "cv")
+best.iter
+
+summary(gbmmodel)
+
+set.seed(1234)
+library(caret)
+fitcontrol<-trainControl(method="cv", number = 5)
+modelgbm<-train(classe~., data=traindata, method="gbm", trControl=fitcontrol, verbose=F)
+
+```
