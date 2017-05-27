@@ -178,7 +178,7 @@ oobe
 
 ## Applying the final Test data here
 
-  - Printing out the results of the 20 samples
+  - Printing out the results of the 20 samples for the Random forest Model
 
 ```{r Final Model, echo=TRUE}
 result<-predict(modelrf, testcleanfinal[, -length(names(testcleanfinal))])
@@ -198,11 +198,29 @@ gbmmodel<-gbm(classe~.,data = traindata,distribution = "multinomial",cv.folds = 
 best.iter <- gbm.perf(gbmmodel, method = "cv")
 best.iter
 
-summary(gbmmodel)
+
 
 set.seed(1234)
 library(caret)
 fitcontrol<-trainControl(method="cv", number = 5)
 modelgbm<-train(classe~., data=traindata, method="gbm", trControl=fitcontrol, verbose=F)
+summary(gbmmodel)
+modelgbm
+
+predictgbm<-predict(modelgbm, testdata)
+confusionMgbm<-confusionMatrix(predictgbm, testdata$classe)
+confusionMgbm
+
+oobegbm<-missed(testdata$classe, predictgbm)
+oobegbm
+```
+
+## Applying the final Test data here
+
+  - Printing out the results of the 20 samples for the Gradient Bossting Model
+
+```{r Final Model [gbm], echo=TRUE}
+resultgbm<-predict(modelgbm, testcleanfinal[, -length(names(testcleanfinal))])
+resultgbm
 
 ```
